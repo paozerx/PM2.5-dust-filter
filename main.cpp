@@ -34,7 +34,7 @@ int fanSpeed = 1;
 // FSM
 int mode = 0;         
 String modes[] = {"Auto", "Manual"};
-String state = "init";
+String state = "Power_off";
 
 bool modeButtonPressed = false;
 
@@ -72,11 +72,11 @@ void loop() {
   if (switchState == LOW) {  
     display.clearDisplay();
     display.display();
-    state = "init";          
+    state = "Power_off";          
   }
 
-  //state init เริ่มการทำงาน
-  if (state == "init") {
+  //state Power_off เริ่มการทำงาน
+  if (state == "Power_off") {
     updateFan();
     if (switchState == HIGH) {  
       state = "loading";          
@@ -94,30 +94,36 @@ void loop() {
     display.println("Opening...");
     display.display();
     delay(2000);
-    state = "filter";   
+    state = "check_filter";   
     menuStartTime = 0;
   }
 
+  else if (state == "check_filter") {
+    String filterStatus = checkFilterStatus();
+    if (filterStatus == "Filter Empty") {
+      state = "low_filter_alert";
+    } else {
+      state = "standby";
+    }
+  }
   // state filter เป็นตัวเช็คฟิลเตอร์กรองในเครื่อง
-  else if (state == "filter") {
-  String filterStatus = checkFilterStatus();
+  else if (state == "low_filter_alert") {
+    String filterStatus = checkFilterStatus();
 
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setCursor(0, 10);
-  display.println("Filter Status:");
-  display.setCursor(0, 30);
-  display.println(filterStatus);
-  display.display();
+    display.clearDisplay();
+    display.setTextSize(1.5);
+    display.setCursor(0, 10);
+    display.println("Low Filter!!");
+    display.display();
 
-  delay(2000);  
+    delay(2000);  
 
-  state = "menu";   
-  menuStartTime = 0;
+    state = "standby";   
+    menuStartTime = 0;
 }
 
-  // state menu เลือกโหมด auto หรือ manual
-  else if (state == "menu") {
+  // state standby เลือกโหมด auto หรือ manual
+  else if (state == "standby") {
     handleModeButton();    
 
     if (menuStartTime == 0) {
@@ -323,17 +329,33 @@ String checkFilterStatus() {
 }
 
 //ปรับพัดลมตามค่า fanspeed
+String fanState = "Slow";  
+
 void updateFan() {
   int pwmValue = 0;
-  if(state == "loading" || state == "menu" || state == "filter" || state == "init"){
+
+  if(state == "Power_off"){
     pwmValue = 0;
+    fanState = "Slow"; // reset
   }
   else{
-    if (fanSpeed == 1) pwmValue = 30;  
-    else if (fanSpeed == 2) pwmValue = 100; 
-    else if (fanSpeed == 3) pwmValue = 255;
-  }
-  analogWrite(fanLedPin, pwmValue);  
-}
+    if(state == "auto"){
+      if(dustDensity <= 50) fanState = "Slow";
+      else if(dustDensity < 100) fanState = "Normal";
+      else fanState = "Max";
+    }
 
+    else if(state == "manual"){
+        if(fanSpeed == 1) fanState = "Slow";
+        else if(fanSpeed == 2) fanState = "Normal";
+        else if(fanSpeed == 3) fanState = "Max";
+    }
+
+    if(fanState == "Slow") pwmValue = 30;
+    else if(fanState == "Normal") pwmValue = 100;
+    else if(fanState == "Max") pwmValue = 255;
+  }
+
+  analogWrite(fanLedPin, pwmValue);
+}
 
